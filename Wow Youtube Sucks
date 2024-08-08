@@ -1,0 +1,226 @@
+// ==UserScript==
+// @name         Wow Youtube Sucks
+// @version      4.44
+// @description  Fix the title a bit
+// @match        https://youtube.com/*
+// @match        https://www.youtube.com/*
+// @match        https://youtu.be/*
+// @match        https://www.youtu.be/*
+// @include      /https?:\/\/(www\.)?youtube\.com\/.*/
+// @icon         https://www.google.com/s2/favicons?sz=64&domain=youtube.com
+// @run-at       document-start
+// @grant        GM_setValue
+// @grant        GM_getValue
+// @grant        GM_deleteValue
+// @grant        GM_listValues
+// ==/UserScript==
+
+const OPTIONS = {
+	backgroundColor: '#36473b',
+	borderRadius: '30px',
+
+};
+
+// consolidating rules - not yet implemented
+const rules = {
+  // template
+  ruleName: {
+      description: 'What this rule is supposed to do',
+      urlFilter: /regex string that window.location.href must match/i,
+      conditions: {
+          condition_name_1: () => 'Array of conditions (as functions) that must be met to run',
+          condition_name_2: () => 'all must evaluate to true when "!!" is prepended',
+          condition_name_3: () => 'on failure "ruleName:conditionName" will be logged as failed',
+          condition_name_4: () => 'all conditions will be evaluated even following a failure (for debug purposes)',
+          condition_name_5: () => false,
+      },
+      triggers: 'to be determined',
+      actions: {
+          action_name_1: ''
+      },
+  }
+};
+
+const redirectShorts = () => {
+	if(window.location.href.match(/\/shorts\//)) {
+		window.location.href = window.location.href.replace(/shorts\//, 'watch?v=');
+	}
+};
+
+const actuallyRemoveShorts = () => {
+	[ ...document.querySelectorAll('div#dismissible.style-scope.ytd-rich-shelf-renderer') ]
+	.filter( f => f.style.display !== 'none' )
+	.filter( f => f.textContent.trim().match(/^shorts/i) )
+	.forEach( f => f.style.display = 'none' );
+
+	[ ...document.querySelectorAll('ytd-reel-shelf-renderer.style-scope.ytd-item-section-renderer[modern-typography]') ]
+	.filter( f => f.style.display !== 'none' )
+	.filter( f => f.innerText.match(/^Shorts\n/) )
+	.forEach( f => f.style.display = 'none' );
+}
+
+const changeNewSectionBackground = () => [ ...document.querySelectorAll('ytd-rich-section-renderer') ].forEach( f => {
+	if(f.innerText.match(/Featured\n/)) {
+		f.style.display = 'none';
+	} else {
+		f.style.backgroundColor = OPTIONS.backgroundColor;
+		f.style.borderRadius = OPTIONS.borderRadius;
+	}
+});
+
+const noMixThx = () => [ ...document.querySelectorAll('ytd-rich-item-renderer.style-scope.ytd-rich-grid-row') ]
+.filter( f => f.innerText.match(/Mix/) )
+.filter( f => f.innerText.match(/More from this channel for you/) )
+.forEach( f => f.remove() );
+
+const turnOffAutoplay = () => document.querySelectorAll('button[title="Autoplay is on"]').forEach( f => f.click() );
+
+const removeAdBlocks = () => document.querySelectorAll('ytd-ad-slot-renderer').forEach( f => f.remove() );
+
+const consolidateTitle = (search=document.querySelector('input#search'), title=document.querySelector('div#title > h1')) => {
+	title.parentElement.style.display = 'none';
+	search.style.width = '900px';
+	if(!search.value) {
+		search.placeholder = title.innerText;
+		search.ondblclick = () => search.value = search.placeholder.trim();
+		search.onblur = () => search.value = search.value === search.placeholder.trim() ? '' : search.value;
+	}
+};
+
+const scrapeData = () => {
+	[ ...document.querySelectorAll('ytd-rich-item-renderer div#details div#meta') ]
+	.filter( f => f.innerText )
+	.map( m => ({
+		title: m.querySelector('a#video-title-link').innerText,
+		href: m.querySelector('a#video-title-link').href,
+		id: m.querySelector('a#video-title-link').href.replace(/^.*\/watch\?v=/, ''),
+		channel: m.querySelector('div#metadata > div#byline-container').innerText,
+		views: m.querySelector('div#metadata > div#metadata-line').innerText.split('\n')[0],
+		posted: m.querySelector('div#metadata > div#metadata-line').innerText.split('\n')[1],
+	}) )
+};
+
+const expandInfo = () => {
+	if(!document.querySelector('ytd-watch-info-text#ytd-watch-info-text[detailed]')) {
+		window.onscroll = (e) => {
+			if(!window.scrolled) {
+				console.log('scrolling to 0, 0!');
+				window.scrollTo(0, 0);
+				window.scrolled = true;
+			}
+		};
+		[ ...document.querySelectorAll('yt-formatted-string#info') ].pop().click();
+	};
+}
+
+const getDateAndViews = () => {
+/*
+[ ...document.querySelectorAll('div#tooltip.style-scope.tp-yt-paper-tooltip.hidden') ]
+.filter( f => f.innerText )
+.filter( f => f.innerText.match(/[\d,]+ views?/) )
+.shift()
+.innerText
+.replace(/\n/g, '')
+.replace(/^\s+/, '')
+.replace(/,/, '')
+.split(/\s+views? •\s+/)
+.map( (m, i) => [ parseInt, Date, ][i](m) );
+*/
+};
+
+const deleteHashtags = () => [ ...document.querySelectorAll('a') ].filter( f => f.innerText ).filter( f => f.innerText.match(/^#/) ).forEach( f => f.remove() );
+
+const removeWatchedVideos = () => [ ...document.querySelectorAll('ytd-rich-item-renderer') ].filter( f => f.querySelector('ytd-thumbnail-overlay-resume-playback-renderer') ).forEach( f => f.style.display = 'none' );
+
+
+const addQucikDisinterest = () => {
+//document.querySelectorAll('div#xni').forEach( f => f.remove() );
+
+	[ ...document.querySelectorAll('ytd-rich-grid-media') ]
+	.forEach( (video, i) => {
+		const xni = document.createElement('div');
+		xni.id = `xni`;
+		xni.name = `xni_${i}`;
+		xni.style = `z-index: ${1000 + i}; position: absolute; width: 50px; height: 50px; left: 15px; top: 15px;  background-color: red; display: none;`;
+		xni.onclick = (e, x=xni) => {
+			e.srcElement.parentElement.querySelector('button').click();
+			setTimeout(
+				() => [... document.querySelectorAll('ytd-menu-popup-renderer  tp-yt-paper-item')].filter( f => f.innerText.match(/not interested/i) )[0].click(),
+				500,
+			);
+		}
+		video.append(xni);
+		video.onmouseover = (e, vid=video) => vid.querySelector('div#xni').style.display = 'block';
+		video.onmouseout = (e, vid=video) => vid.querySelector('div#xni').style.display = 'none';
+	});
+};
+
+const fixShortsInSearches = () => {
+
+	[ ...document.querySelectorAll('ytd-video-renderer.style-scope.ytd-item-section-renderer') ].filter( f => f.innerText.match(/^SHORTS/) ).forEach( f => {
+		f.style.border = '1px solid blue';
+		[ ...f.querySelectorAll('a') ]
+		.filter( ff => ff.getAttribute('href') )
+		.filter( ff => ff.getAttribute('href').match(/\/shorts\//) )
+		.forEach( ff => ff.setAttribute('href', ff.getAttribute('href').replace(/shorts\//, 'watch?v=')) );
+
+		[ ...f.querySelectorAll('div') ]
+		.filter( ff => ff.innerText.match(/^SHORTS$/))
+		.forEach( ff => ff.style.color = 'blue' )
+	});
+};
+
+const makeSuggestedVideosScrollable = () => {
+	document.querySelector('ytd-item-section-renderer[section-identifier="sid-wn-chips"] > div#contents').style = `height: ${document.querySelector('video').clientHeight}px; overflow: scroll; overflow-x: hidden; overflow-y: auto;`;
+};
+
+const updateWhenVolumeChangesInAnotherTab = (video=document.querySelector('video'), storage=JSON.parse(JSON.parse(window.localStorage['yt-player-volume']).data) ) => {
+	video.volume = storage.volume / 100;
+	video.muted = storage.muted;
+	setTimeout( updateWhenVolumeChangesInAnotherTab, 2500, );
+}
+
+
+
+
+
+
+
+
+
+
+const theaterMode = () => setTimeout( () => [ ...document.querySelectorAll('button[title="Theater mode (t)"]') ].forEach( f => f.click() ), 2000, );
+
+(function() {
+  'use strict';
+  redirectShorts();
+  console.log(`==== Starting Loop at ${new Date().toLocaleString()} ====`);
+  const loopInterval = setInterval(
+      () => {
+          // Following line logs to console every minute when seconds === 0
+          !new Date().getSeconds() ? console.log(`ok - ${new Date().getLocaleTimeString()}`) : null;
+
+          if(window.location.href.match(/\/watch\?v=/)) {
+              removeAdBlocks();
+              consolidateTitle();
+              turnOffAutoplay();
+              expandInfo();
+              deleteHashtags();
+              makeSuggestedVideosScrollable();
+              updateWhenVolumeChangesInAnotherTab();
+              theaterMode();
+          } else if(window.location.href.match(/\/results\?search_query=/)) {
+              fixShortsInSearches();
+          }
+          else {
+              changeNewSectionBackground();
+              actuallyRemoveShorts();
+              noMixThx();
+              removeWatchedVideos();
+              addQucikDisinterest();
+          }
+      },
+      1000,
+  );
+
+})();
